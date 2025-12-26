@@ -91,7 +91,36 @@ jobs:
           libtinfo5 \
           cmake \
           libffi-dev \
-          libssl-dev
+          libssl-dev \
+          aidl
+    
+    # ───────────────────────────────────────────────────────
+    # Step 4b: Install Android Command Line Tools Manually
+    # ───────────────────────────────────────────────────────
+    - name: 📲 Install Android Command Line Tools
+      run: |
+        cd ~
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        mkdir -p android-sdk/cmdline-tools
+        unzip -q commandlinetools-linux-9477386_latest.zip -d android-sdk/cmdline-tools
+        mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+        
+        # Set environment variables
+        export ANDROID_SDK_ROOT=$HOME/android-sdk
+        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH
+        
+        # Accept licenses
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+        # Install necessary packages
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-35"
+        
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/build-tools/35.0.0" >> $GITHUB_PATH
     
     # ───────────────────────────────────────────────────────
     # Step 5: Python Build Tools Install Karo
@@ -119,21 +148,19 @@ jobs:
           buildozer-
     
     # ───────────────────────────────────────────────────────
-    # Step 7: Android SDK License Accept Karo
+    # Step 7: Android SDK License Accept Karo (Not needed now)
     # ───────────────────────────────────────────────────────
-    - name: 📜 Accept Android SDK Licenses
-      run: |
-        mkdir -p ~/.android
-        echo "count=0" > ~/.android/repositories.cfg
-        yes | sudo apt-get install -y android-sdk 2>/dev/null || true
+    # Licenses already accepted in Step 4b
     
     # ───────────────────────────────────────────────────────
     # Step 8: Buildozer Environment Variables Set Karo
     # ───────────────────────────────────────────────────────
     - name: ⚙️ Set Environment Variables
       run: |
-        echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r26b" >> $GITHUB_ENV
+        echo "ANDROIDAPI=35" >> $GITHUB_ENV
+        echo "ANDROIDNDKVER=r26b" >> $GITHUB_ENV
         echo "GRADLE_OPTS=-Xmx2048m -Dorg.gradle.daemon=false" >> $GITHUB_ENV
     
     # ───────────────────────────────────────────────────────
