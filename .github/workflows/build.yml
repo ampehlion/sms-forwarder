@@ -1,378 +1,96 @@
-# ═══════════════════════════════════════════════════════════
-#     GITHUB ACTIONS - AUTOMATIC APK BUILDER
-# ═══════════════════════════════════════════════════════════
-# 
-# Ye workflow automatically APK build karega jab bhi:
-# 1. Code push karo (main/master branch pe)
-# 2. Manual trigger karo (Actions tab se)
-#
-# Build time: 45-60 min (first time), 5-10 min (next times)
-# Output: bin/smsforwarder-1.0-debug.apk
-#
-# ═══════════════════════════════════════════════════════════
-
 name: Build Android APK
 
-# ═══════════════════════════════════════════════════════════
-#           TRIGGER CONDITIONS
-# ═══════════════════════════════════════════════════════════
-
 on:
-  # Automatic: Jab code push karo
   push:
-    branches: 
-      - main      # Main branch
-      - master    # Ya master branch
+    branches: [main, master]
     paths:
-      - 'main.py'           # Sirf jab ye files change hon
+      - 'main.py'
       - 'buildozer.spec'
       - '.github/workflows/build.yml'
-  
-  # Manual: Actions tab se manually trigger kar sakte ho
   workflow_dispatch:
-
-# ═══════════════════════════════════════════════════════════
-#           BUILD JOB
-# ═══════════════════════════════════════════════════════════
 
 jobs:
   build:
     name: Build APK
-    runs-on: ubuntu-22.04  # Ubuntu 22.04 LTS (stable)
+    runs-on: ubuntu-20.04
     
     steps:
-    # ───────────────────────────────────────────────────────
-    # Step 1: Code Download Karo
-    # ───────────────────────────────────────────────────────
-    - name: 📥 Checkout Repository
-      uses: actions/checkout@v4
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
     
-    # ───────────────────────────────────────────────────────
-    # Step 2: Python Setup Karo
-    # ───────────────────────────────────────────────────────
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v5
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.11'  # Python 3.11 (stable + fast)
+        python-version: '3.9'
     
-    # ───────────────────────────────────────────────────────
-    # Step 3: Java Setup Karo (Android build ke liye)
-    # ───────────────────────────────────────────────────────
-    - name: ☕ Set up JDK
-      uses: actions/setup-java@v4
+    - name: ☕ Setup JDK
+      uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'  # Eclipse Temurin JDK
-        java-version: '17'        # Java 17 LTS
+        distribution: 'temurin'
+        java-version: '11'
     
-    # ───────────────────────────────────────────────────────
-    # Step 4: System Dependencies Install Karo
-    # ───────────────────────────────────────────────────────
-    - name: 📦 Install System Dependencies
+    - name: 📦 Install system dependencies
       run: |
-        sudo apt-get update -qq
+        sudo apt-get update
         sudo apt-get install -y \
-          git \
-          zip \
-          unzip \
-          openjdk-17-jdk \
-          wget \
-          curl \
-          lsb-release \
+          python3-pip \
           build-essential \
-          libssl-dev \
-          libffi-dev \
-          python3-dev \
-          ccache \
+          git \
+          ffmpeg \
+          libsdl2-dev \
+          libsdl2-image-dev \
+          libsdl2-mixer-dev \
+          libsdl2-ttf-dev \
+          libportmidi-dev \
+          libswscale-dev \
+          libavformat-dev \
+          libavcodec-dev \
+          zlib1g-dev \
+          libgstreamer1.0 \
+          gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good \
           autoconf \
           libtool \
-          pkg-config \
-          zlib1g-dev \
-          libncurses5-dev \
-          libncursesw5-dev \
-          libtinfo5 \
-          cmake
+          pkg-config
     
-    # ───────────────────────────────────────────────────────
-    # Step 4b: Complete Android SDK Setup with AIDL
-    # ───────────────────────────────────────────────────────
-    - name: 📲 Setup Complete Android SDK with AIDL
+    - name: 🔧 Install Buildozer and Cython
       run: |
-        echo "Setting up Android SDK..."
-        
-        # Create SDK directory
-        mkdir -p $HOME/android-sdk
-        cd $HOME/android-sdk
-        
-        # Download command line tools
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip -q commandlinetools-linux-11076708_latest.zip
-        mkdir -p cmdline-tools/latest
-        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-        
-        # Set SDK paths
-        export ANDROID_HOME=$HOME/android-sdk
-        export ANDROID_SDK_ROOT=$HOME/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-        export PATH=$ANDROID_HOME/platform-tools:$PATH
-        
-        # Accept all licenses
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        
-        # Install necessary SDK components including build-tools with AIDL
-        echo "Installing Android SDK components..."
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "platforms;android-35" \
-          "platforms;android-34" \
-          "build-tools;35.0.0" \
-          "build-tools;34.0.0" \
-          "ndk;26.3.11579264"
-        
-        # Add build-tools to PATH (this includes AIDL)
-        export PATH=$ANDROID_HOME/build-tools/35.0.0:$PATH
-        
-        # Verify AIDL is available
-        echo "Checking AIDL availability..."
-        if [ -f "$ANDROID_HOME/build-tools/35.0.0/aidl" ]; then
-          echo "✓ AIDL found at: $ANDROID_HOME/build-tools/35.0.0/aidl"
-          $ANDROID_HOME/build-tools/35.0.0/aidl --version || echo "AIDL ready"
-        else
-          echo "✗ AIDL not found, but continuing..."
-        fi
-        
-        # Save environment variables for next steps
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROIDAPI=35" >> $GITHUB_ENV
-        echo "ANDROIDNDK=$HOME/android-sdk/ndk/26.3.11579264" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-        echo "$HOME/android-sdk/build-tools/35.0.0" >> $GITHUB_PATH
-        echo "$HOME/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
-        
-        echo "Android SDK setup complete!"
+        pip3 install --upgrade pip
+        pip3 install --upgrade Cython==0.29.33
+        pip3 install --upgrade buildozer
+        pip3 install --upgrade virtualenv
     
-    # ───────────────────────────────────────────────────────
-    # Step 5: Python Build Tools Install Karo
-    # ───────────────────────────────────────────────────────
-    - name: 🔧 Install Python Build Tools
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install --upgrade cython==0.29.36
-        pip install --upgrade buildozer
-    
-    # ───────────────────────────────────────────────────────
-    # Step 6: Buildozer Cache Setup (Speed ke liye)
-    # ───────────────────────────────────────────────────────
-    - name: 💾 Cache Buildozer Directory
-      uses: actions/cache@v4
+    - name: 💾 Cache Buildozer global directory
+      uses: actions/cache@v3
       with:
-        path: |
-          .buildozer
-          ~/.buildozer
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
-        restore-keys: |
-          buildozer-${{ hashFiles('buildozer.spec') }}-
-          buildozer-
+        path: .buildozer_global
+        key: buildozer-global-${{ hashFiles('buildozer.spec') }}
     
-    # ───────────────────────────────────────────────────────
-    # Step 7: Android SDK License Accept Karo (Not needed now)
-    # ───────────────────────────────────────────────────────
-    # Licenses already accepted in Step 4b
-    
-    # ───────────────────────────────────────────────────────
-    # Step 8: Buildozer Environment Variables
-    # ───────────────────────────────────────────────────────
-    - name: ⚙️ Configure Buildozer Environment
-      run: |
-        echo "Configuring Buildozer environment..."
-        echo "GRADLE_OPTS=-Xmx4096m -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4096m" >> $GITHUB_ENV
-        echo "USE_SDK_WRAPPER=1" >> $GITHUB_ENV
-        echo "P4A_RELEASE_KEYSTORE=" >> $GITHUB_ENV
-        
-        # Create .buildozer directory structure
-        mkdir -p $HOME/.buildozer/android/platform
-        
-        # Link our Android SDK to buildozer's expected location
-        ln -sf $HOME/android-sdk $HOME/.buildozer/android/platform/android-sdk || true
-        
-        echo "Environment configured!"
-    
-    # ───────────────────────────────────────────────────────
-    # Step 9: Build APK with Buildozer (with debug output)
-    # ───────────────────────────────────────────────────────
-    - name: 🔨 Build APK with Buildozer
-      run: |
-        echo "🚀 Starting APK build..."
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        
-        # Print environment for debugging
-        echo "Environment check:"
-        echo "ANDROID_HOME: $ANDROID_HOME"
-        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-        echo "PATH: $PATH"
-        
-        # Check AIDL
-        echo "Checking for AIDL..."
-        which aidl || echo "AIDL not in PATH, buildozer will use SDK version"
-        
-        # Build command with verbose output
-        buildozer -v android debug 2>&1 | tee build.log
-        
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "✅ APK build complete!"
-        
-        # APK info dikhao
-        if [ -f bin/*.apk ]; then
-          echo "📦 APK Details:"
-          ls -lh bin/*.apk
-          echo "📍 Location: bin/"
-        else
-          echo "❌ APK not found!"
-          echo "Last 100 lines of build log:"
-          tail -100 build.log
-          exit 1
-        fi
-    
-    # ───────────────────────────────────────────────────────
-    # Step 10: Build Logs Save Karo (Debug ke liye)
-    # ───────────────────────────────────────────────────────
-    - name: 📋 Save Build Logs
-      if: always()  # Fail ho ya pass, logs save karo
-      uses: actions/upload-artifact@v4
+    - name: 💾 Cache Buildozer directory
+      uses: actions/cache@v3
       with:
-        name: build-logs
-        path: |
-          .buildozer/android/platform/build-*/logs/
-          .buildozer/android/logs/
-        retention-days: 7  # 7 din tak logs rakho
+        path: .buildozer
+        key: ${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
     
-    # ───────────────────────────────────────────────────────
-    # Step 11: APK Upload Karo (Download ke liye)
-    # ───────────────────────────────────────────────────────
-    - name: 📤 Upload APK
-      uses: actions/upload-artifact@v4
+    - name: 🔨 Build with Buildozer
+      run: |
+        # Set buildozer home
+        export BUILDOZER_WARN_ON_ROOT=0
+        
+        # Build APK
+        yes | buildozer android debug
+      
+    - name: 📤 Upload APK artifact
+      uses: actions/upload-artifact@v3
       with:
         name: sms-forwarder-apk
         path: bin/*.apk
-        retention-days: 30  # 30 din tak APK available rahega
+        retention-days: 30
     
-    # ───────────────────────────────────────────────────────
-    # Step 12: Build Summary Dikhao
-    # ───────────────────────────────────────────────────────
-    - name: 📊 Build Summary
-      if: success()
-      run: |
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "🎉 BUILD SUCCESSFUL!"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        echo "✅ APK built successfully"
-        echo "📦 File: $(ls bin/*.apk)"
-        echo "📏 Size: $(du -h bin/*.apk | cut -f1)"
-        echo ""
-        echo "📥 Download APK:"
-        echo "   1. Go to Actions tab"
-        echo "   2. Click on this workflow run"
-        echo "   3. Scroll to 'Artifacts' section"
-        echo "   4. Download 'sms-forwarder-apk'"
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-
-# ═══════════════════════════════════════════════════════════
-#           USAGE INSTRUCTIONS
-# ═══════════════════════════════════════════════════════════
-#
-# FILE LOCATION:
-# --------------
-# Is file ko yahan save karo:
-# .github/workflows/build.yml
-#
-# Folder structure:
-# your-repo/
-# ├── main.py
-# ├── buildozer.spec
-# └── .github/
-#     └── workflows/
-#         └── build.yml  ← YE FILE
-#
-#
-# AUTOMATIC BUILD:
-# ----------------
-# Jab bhi aap in files ko edit karke commit karo:
-# - main.py
-# - buildozer.spec
-# - build.yml
-#
-# Automatically build start ho jayega!
-#
-#
-# MANUAL BUILD:
-# -------------
-# 1. GitHub repository pe jao
-# 2. "Actions" tab click karo
-# 3. Left side: "Build Android APK" select karo
-# 4. Right side: "Run workflow" button
-# 5. Branch select karo (main/master)
-# 6. "Run workflow" click karo
-#
-#
-# DOWNLOAD APK:
-# -------------
-# Jab build complete ho (green checkmark ✅):
-# 1. Actions tab pe jao
-# 2. Latest successful run click karo
-# 3. Neeche "Artifacts" section
-# 4. "sms-forwarder-apk" download karo
-# 5. ZIP extract karo
-# 6. APK ready! 🎉
-#
-#
-# BUILD TIME:
-# -----------
-# First build:  45-60 minutes
-#   - Android SDK download (~2 GB)
-#   - Android NDK download (~1 GB)
-#   - Python dependencies
-#   - Compilation
-#
-# Next builds:  5-10 minutes
-#   - Cache use hoga
-#   - Sirf changed files compile hongi
-#
-#
-# TROUBLESHOOTING:
-# ----------------
-# Build fail ho raha hai?
-# 1. Build logs check karo (download karke)
-# 2. Error message copy karo
-# 3. Common issues:
-#    - Syntax error in main.py
-#    - Missing comma in buildozer.spec
-#    - YAML indentation wrong
-#    - Network timeout (retry karo)
-#
-#
-# CACHE CLEAR:
-# ------------
-# Agar build mein problem aa rahi hai:
-# 1. Repository Settings → Actions
-# 2. Caches section mein jao
-# 3. "buildozer-*" cache delete karo
-# 4. Fresh build run karo
-#
-#
-# FREE TIER LIMITS:
-# -----------------
-# GitHub Actions free tier:
-# - 2000 minutes/month (public repos unlimited!)
-# - 500 MB storage
-# - Concurrent jobs: 20
-#
-# Ye project ke liye kaafi hai! ✅
-#
-# ═══════════════════════════════════════════════════════════
+    - name: 📋 Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-logs
+        path: .buildozer/android/platform/build-*/logs/
+        retention-days: 7
