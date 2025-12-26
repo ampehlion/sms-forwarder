@@ -1,40 +1,301 @@
-cache: 'pip'
-5. **Delete karo ye line**
-6. **Commit changes** click karo
+# ═══════════════════════════════════════════════════════════
+#     GITHUB ACTIONS - AUTOMATIC APK BUILDER
+# ═══════════════════════════════════════════════════════════
+# 
+# Ye workflow automatically APK build karega jab bhi:
+# 1. Code push karo (main/master branch pe)
+# 2. Manual trigger karo (Actions tab se)
+#
+# Build time: 45-60 min (first time), 5-10 min (next times)
+# Output: bin/smsforwarder-1.0-debug.apk
+#
+# ═══════════════════════════════════════════════════════════
 
-### **Method 2: Delete & Re-upload**
-1. Purani `build.yml` file delete karo
-2. **Updated artifact** ka code copy karo
-3. Naya file banao `.github/workflows/build.yml`
-4. Code paste karo
-5. Commit karo
+name: Build Android APK
 
----
+# ═══════════════════════════════════════════════════════════
+#           TRIGGER CONDITIONS
+# ═══════════════════════════════════════════════════════════
 
-## 🚀 **Build Restart Karo:**
+on:
+  # Automatic: Jab code push karo
+  push:
+    branches: 
+      - main      # Main branch
+      - master    # Ya master branch
+    paths:
+      - 'main.py'           # Sirf jab ye files change hon
+      - 'buildozer.spec'
+      - '.github/workflows/build.yml'
+  
+  # Manual: Actions tab se manually trigger kar sakte ho
+  workflow_dispatch:
 
-Agar build already fail ho chuka hai:
+# ═══════════════════════════════════════════════════════════
+#           BUILD JOB
+# ═══════════════════════════════════════════════════════════
 
-1. **Actions tab** pe jao
-2. Failed workflow kholo
-3. Top-right pe **"Re-run jobs"** button
-4. **"Re-run failed jobs"** select karo
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-22.04  # Ubuntu 22.04 LTS (stable)
+    
+    steps:
+    # ───────────────────────────────────────────────────────
+    # Step 1: Code Download Karo
+    # ───────────────────────────────────────────────────────
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+    
+    # ───────────────────────────────────────────────────────
+    # Step 2: Python Setup Karo
+    # ───────────────────────────────────────────────────────
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'  # Python 3.11 (stable + fast)
+    
+    # ───────────────────────────────────────────────────────
+    # Step 3: Java Setup Karo (Android build ke liye)
+    # ───────────────────────────────────────────────────────
+    - name: ☕ Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'  # Eclipse Temurin JDK
+        java-version: '17'        # Java 17 LTS
+    
+    # ───────────────────────────────────────────────────────
+    # Step 4: System Dependencies Install Karo
+    # ───────────────────────────────────────────────────────
+    - name: 📦 Install System Dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y \
+          git \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          wget \
+          lsb-release \
+          build-essential \
+          libssl-dev \
+          libffi-dev \
+          python3-dev \
+          ccache \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev
+    
+    # ───────────────────────────────────────────────────────
+    # Step 5: Python Build Tools Install Karo
+    # ───────────────────────────────────────────────────────
+    - name: 🔧 Install Python Build Tools
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install --upgrade cython==0.29.36
+        pip install --upgrade buildozer
+    
+    # ───────────────────────────────────────────────────────
+    # Step 6: Buildozer Cache Setup (Speed ke liye)
+    # ───────────────────────────────────────────────────────
+    - name: 💾 Cache Buildozer Directory
+      uses: actions/cache@v4
+      with:
+        path: |
+          .buildozer
+          ~/.buildozer
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('main.py') }}
+        restore-keys: |
+          buildozer-${{ hashFiles('buildozer.spec') }}-
+          buildozer-
+    
+    # ───────────────────────────────────────────────────────
+    # Step 7: Android SDK License Accept Karo
+    # ───────────────────────────────────────────────────────
+    - name: 📜 Accept Android SDK Licenses
+      run: |
+        mkdir -p ~/.android
+        echo "count=0" > ~/.android/repositories.cfg
+        yes | sudo apt-get install -y android-sdk 2>/dev/null || true
+    
+    # ───────────────────────────────────────────────────────
+    # Step 8: Buildozer Environment Variables Set Karo
+    # ───────────────────────────────────────────────────────
+    - name: ⚙️ Set Environment Variables
+      run: |
+        echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "GRADLE_OPTS=-Xmx2048m -Dorg.gradle.daemon=false" >> $GITHUB_ENV
+    
+    # ───────────────────────────────────────────────────────
+    # Step 9: APK Build Karo! (Main Step)
+    # ───────────────────────────────────────────────────────
+    - name: 🔨 Build APK with Buildozer
+      run: |
+        echo "🚀 Starting APK build..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Build command
+        buildozer -v android debug
+        
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ APK build complete!"
+        
+        # APK info dikhao
+        if [ -f bin/*.apk ]; then
+          echo "📦 APK Details:"
+          ls -lh bin/*.apk
+          echo "📍 Location: bin/"
+        else
+          echo "❌ APK not found!"
+          exit 1
+        fi
+    
+    # ───────────────────────────────────────────────────────
+    # Step 10: Build Logs Save Karo (Debug ke liye)
+    # ───────────────────────────────────────────────────────
+    - name: 📋 Save Build Logs
+      if: always()  # Fail ho ya pass, logs save karo
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          .buildozer/android/platform/build-*/logs/
+          .buildozer/android/logs/
+        retention-days: 7  # 7 din tak logs rakho
+    
+    # ───────────────────────────────────────────────────────
+    # Step 11: APK Upload Karo (Download ke liye)
+    # ───────────────────────────────────────────────────────
+    - name: 📤 Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: sms-forwarder-apk
+        path: bin/*.apk
+        retention-days: 30  # 30 din tak APK available rahega
+    
+    # ───────────────────────────────────────────────────────
+    # Step 12: Build Summary Dikhao
+    # ───────────────────────────────────────────────────────
+    - name: 📊 Build Summary
+      if: success()
+      run: |
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🎉 BUILD SUCCESSFUL!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "✅ APK built successfully"
+        echo "📦 File: $(ls bin/*.apk)"
+        echo "📏 Size: $(du -h bin/*.apk | cut -f1)"
+        echo ""
+        echo "📥 Download APK:"
+        echo "   1. Go to Actions tab"
+        echo "   2. Click on this workflow run"
+        echo "   3. Scroll to 'Artifacts' section"
+        echo "   4. Download 'sms-forwarder-apk'"
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-Ya naya build trigger karo:
-1. **Actions → Build Android APK**
-2. **"Run workflow"** click karo
 
----
-
-## ✅ **Expected Output:**
-
-Ab ye error nahi aayega:
-```
-❌ No file matched to requirements.txt
-```
-
-Instead ye dikhega:
-```
-✓ Set up Python (3.11)
-✓ Python 3.11.x installed
-✓ Ready to install packages
+# ═══════════════════════════════════════════════════════════
+#           USAGE INSTRUCTIONS
+# ═══════════════════════════════════════════════════════════
+#
+# FILE LOCATION:
+# --------------
+# Is file ko yahan save karo:
+# .github/workflows/build.yml
+#
+# Folder structure:
+# your-repo/
+# ├── main.py
+# ├── buildozer.spec
+# └── .github/
+#     └── workflows/
+#         └── build.yml  ← YE FILE
+#
+#
+# AUTOMATIC BUILD:
+# ----------------
+# Jab bhi aap in files ko edit karke commit karo:
+# - main.py
+# - buildozer.spec
+# - build.yml
+#
+# Automatically build start ho jayega!
+#
+#
+# MANUAL BUILD:
+# -------------
+# 1. GitHub repository pe jao
+# 2. "Actions" tab click karo
+# 3. Left side: "Build Android APK" select karo
+# 4. Right side: "Run workflow" button
+# 5. Branch select karo (main/master)
+# 6. "Run workflow" click karo
+#
+#
+# DOWNLOAD APK:
+# -------------
+# Jab build complete ho (green checkmark ✅):
+# 1. Actions tab pe jao
+# 2. Latest successful run click karo
+# 3. Neeche "Artifacts" section
+# 4. "sms-forwarder-apk" download karo
+# 5. ZIP extract karo
+# 6. APK ready! 🎉
+#
+#
+# BUILD TIME:
+# -----------
+# First build:  45-60 minutes
+#   - Android SDK download (~2 GB)
+#   - Android NDK download (~1 GB)
+#   - Python dependencies
+#   - Compilation
+#
+# Next builds:  5-10 minutes
+#   - Cache use hoga
+#   - Sirf changed files compile hongi
+#
+#
+# TROUBLESHOOTING:
+# ----------------
+# Build fail ho raha hai?
+# 1. Build logs check karo (download karke)
+# 2. Error message copy karo
+# 3. Common issues:
+#    - Syntax error in main.py
+#    - Missing comma in buildozer.spec
+#    - YAML indentation wrong
+#    - Network timeout (retry karo)
+#
+#
+# CACHE CLEAR:
+# ------------
+# Agar build mein problem aa rahi hai:
+# 1. Repository Settings → Actions
+# 2. Caches section mein jao
+# 3. "buildozer-*" cache delete karo
+# 4. Fresh build run karo
+#
+#
+# FREE TIER LIMITS:
+# -----------------
+# GitHub Actions free tier:
+# - 2000 minutes/month (public repos unlimited!)
+# - 500 MB storage
+# - Concurrent jobs: 20
+#
+# Ye project ke liye kaafi hai! ✅
+#
+# ═══════════════════════════════════════════════════════════
