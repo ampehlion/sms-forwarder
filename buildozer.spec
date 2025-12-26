@@ -8,7 +8,7 @@ package.domain = org.example
 # Source
 source.dir = .
 source.include_exts = py
-version = 1.0
+version = 9.1.0
 
 # Requirements
 requirements = python3,kivy==2.2.1,pyjnius,requests,android
@@ -18,7 +18,7 @@ permissions = INTERNET,READ_SMS,RECEIVE_SMS,SEND_SMS,READ_CONTACTS,READ_PHONE_ST
 android.permissions = INTERNET,READ_SMS,RECEIVE_SMS,SEND_SMS,READ_CONTACTS,READ_PHONE_STATE,POST_NOTIFICATIONS,FOREGROUND_SERVICE
 
 # Android configuration
-android.api = 33
+android.api = 34
 android.minapi = 21
 android.ndk = 25b
 android.accept_sdk_license = True
